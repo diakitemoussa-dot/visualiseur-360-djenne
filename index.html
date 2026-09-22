@@ -238,11 +238,23 @@ video.addEventListener('loadeddata', () => {
 if (video.readyState >= 1) updateTimeUI(video.currentTime, video.duration || 210.77);
 
 video.addEventListener('error', ()=>{
-  loadingMsg.textContent = 'Erreur vidéo : ./video360-djenne.mp4';
+  loadingMsg.textContent = 'Erreur vidéo : ./video360-djenne.mp4 — réessai...';
   loadingMsg.style.color = '#ff6b6b';
+  console.error(video.error);
+  setTimeout(()=>{ try{ video.load(); }catch(e){} }, 1500);
 });
+video.addEventListener('stalled', ()=> console.warn('[360] stalled'));
+video.addEventListener('waiting', ()=> console.warn('[360] waiting'));
 video.addEventListener('canplay', ()=>{
   if (loadingMsg.textContent.includes('Chargement')) loadingMsg.textContent = 'Prêt à démarrer';
+});
+// Stabilité : WebGL context
+document.querySelector('a-scene').addEventListener('loaded', ()=>{
+  const scene = document.querySelector('a-scene');
+  if (scene.renderer) {
+    scene.renderer.domElement.addEventListener('webglcontextlost', (e)=>{ e.preventDefault(); console.warn('[360] WebGL context lost'); }, false);
+    scene.renderer.domElement.addEventListener('webglcontextrestored', ()=> console.log('[360] WebGL restored'), false);
+  }
 });
 
 // --- Onboarding ---
@@ -406,16 +418,25 @@ window.addEventListener('mouseup', ()=>{
 // Molette : toujours scrub (ultra fluide)
 window.addEventListener('wheel', (e)=>{
   if (overlay.classList.contains('hidden') === false) return;
-  // si onboarding visible, premier wheel le cache et scrub quand même
   if (!onboardingHidden) hideOnboarding();
-  // évite le scroll page
   e.preventDefault();
   const delta = e.deltaY;
-  // deltaY positif = molette vers bas ; on avance dans le temps quand on va vers le bas (intuitif)
-  // inverse si tu préfères : utiliser -delta
   const newT = (video.currentTime || targetTime) + delta * WHEEL_FACTOR;
   scrubTo(newT);
 }, {passive: false});
+
+// Stabilité : resize debounced + visibility
+let resizeTimeout = null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(()=>{
+    const scene = document.querySelector('a-scene');
+    if (scene && scene.resize) scene.resize();
+  }, 150);
+});
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden) console.log('[360] hidden -> pause stable');
+});
 
 </script>
 </body>
