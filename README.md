@@ -1,49 +1,43 @@
-# Visualiseur 360° — Mosquée de Djenné
+# Visualiseur 360° — Mosquée de Djenné (Stable)
 
-Visualiseur Web monopage (SPA) optimisé mobile pour explorer une vidéo 360° équirectangulaire **3:30** (1920×960, H.264) de la Grande Mosquée de Djenné.
+Visualiseur Web monopage optimisé mobile — **technologie stable de `webar-360` / `360°C/webar-site`** (Three.js direct + CameraRig + GyroControls) adaptée à la vidéo 360°, en gardant la théorie **scroll = temps**.
 
-**Stack :** A-Frame 1.6.0 (Three.js rendering), WebGL, JavaScript vanilla — single file `index.html`.
+Vidéo équirectangulaire **3:30** — `video360-djenne.mp4` 49.1 MB, 1920×960, H.264 (source HEVC 2880×1440 transcodée pour <100 MB GitHub).
 
-### Fonctionnalités
+### Stack stable (vs A-Frame instable)
+- `vendor/three/build/three.module.js` (Three.js rendering direct, pas A-Frame)
+- `js/CameraRig.js` + `js/GyroControls.js` : gyroscope + rotation 360 stable
+- `js/TouchControls.js` **adapté** : 1 doigt horizontal → `rig.rotate()` (360), 1 doigt vertical → `videoScrub.scrubByDelta()`, 2 doigts pinch → `rig.pinch()` (zoom), molette → scrub temps
+- `js/VideoScrubController.js` : contrôle temporel ultra-fluide via `requestAnimationFrame` + `fastSeek` / `currentTime`
+- `js/main.js` : sphère inversée `SphereGeometry(500,64,48)` + `VideoTexture`, boucle `renderer.setAnimationLoop`, onboarding tactile
+- `css/style.css` : base `webar-360` (glassmorphism, topbar, bottombar)
 
-- **Vidéo 360°** sur `<a-videosphere>` préchargée, mise en pause à `t=1.0s` (évite frame noire à `t=0`)
-- **Vue 360°** : `look-controls` + gyroscope (`magicWindowTrackingEnabled`) — glissement **horizontal** ←→ pour regarder autour
-- **Temps** : glissement **vertical** ↑↓ ou **molette** → scrub temporel ultra-fluide via `requestAnimationFrame` + `video.currentTime` / `fastSeek`
-- **Onboarding tactile** : overlay animé (GS + CSS) après "Démarrer" — disparaît sur **"J'ai compris"** ou premier geste ou après 5s
-- **Compteur** : `Étape / Temps : 00:04 / 03:30  2%` en bas
+### Théorie conservée : scroll = temps
+- **Horizontal ←→** : regarde autour (360°, stable)
+- **Vertical ↑↓** ou **molette** : avance / recule dans le temps (0 → 210s)
+- **Pinch** : zoom FOV 42°–95°
+- Garde `START_TIME = 1.0s` (évite frame noire à t=0)
 
 ### Fichiers
-
 ```
 visualiseur-360-djenne/
- ├─ index.html              # code complet HTML+CSS+JS
- └─ video360-djenne.mp4     # 49.1 MB, 1920×960, H.264, 3:30, équirectangulaire
+├─ index.html
+├─ css/style.css
+├─ js/main.js, CameraRig.js, GyroControls.js, TouchControls.js, VideoScrubController.js
+├─ vendor/three/...
+└─ video360-djenne.mp4  (49.1 MB)
 ```
 
-> Vidéo source originale : `C:\Users\Kabakoo Apprenant.e\Downloads\English (3).mp4` (2880×1440, HEVC) — transcodée en H.264 pour compatibilité Chrome/Quest et <100 MB pour GitHub.
-
-### Lancer en local (obligatoire — CORS + Range)
-
-Le serveur doit supporter `Range: bytes` (`206 PartialContent`) pour le seeking, sinon `seekable` reste `0-0`.
-
+### Lancer en local (CORS + Range obligatoire)
 ```powershell
-# http-server (recommandé, support Range + CORS)
 npx http-server -p 8000 --cors -c-1
-
-# ou
-npx serve -l 8000
-
-# PAS python -m http.server (ne renvoie pas 206 sur ce Python)
+# puis http://localhost:8000/ → Démarrer → glisser ↔ / ↕ / molette
+# Quest même WiFi : http://IP_DU_PC:8000/
 ```
 
-Puis ouvrir `http://localhost:8000/` → **Démarrer** → glisser ↔ pour regarder, ↕ / molette pour le temps.
+### Déploiement
+Repo `diakitemoussa-dot/visualiseur-360-djenne` sur `master`/`root` → Pages : `https://diakitemoussa-dot.github.io/visualiseur-360-djenne/`
 
-Sur Meta Quest (même WiFi) : `http://IP_DU_PC:8000/`
-
-### Déployer sur GitHub Pages
-
-Le repo est public et Pages est activé sur `main` / `root` → URL : `https://fansestar355-star.github.io/visualiseur-360-djenne/`
-
-### Crédits
-
-Vidéo 360° Kabakoo — Mosquée de Djenné. Projet initié le 22/09/2026.
+### Origine
+Technologie reprise de `C:\Users\Kabakoo Apprenant.e\Desktop\MES PROJETS\360°C\webar-site` et `https://diakitemoussa-dot.github.io/webar-360/` (Dogon Village), adaptée de `TOUR` statique à `VideoTexture` dynamique.
+Crédits vidéo : Kabakoo — Mosquée de Djenné.
