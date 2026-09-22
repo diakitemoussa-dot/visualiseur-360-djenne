@@ -30,6 +30,9 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
+// Stabilité : gestion WebGL context lost (mobile)
+renderer.domElement.addEventListener('webglcontextlost', (e)=>{ e.preventDefault(); console.warn('[360] WebGL context lost'); }, false);
+renderer.domElement.addEventListener('webglcontextrestored', ()=>{ console.log('[360] WebGL context restored'); }, false);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(78, innerWidth / innerHeight, 0.1, 1100);
@@ -37,7 +40,7 @@ const camera = new THREE.PerspectiveCamera(78, innerWidth / innerHeight, 0.1, 11
 const rig = new CameraRig(camera);
 const gyro = new GyroControls(rig);
 
-// --- Vidéo 360 ---
+// --- Vidéo 360 (stable : ajout au DOM caché pour iOS) ---
 const video = document.createElement('video');
 video.src = './video360-djenne.mp4';
 video.crossOrigin = 'anonymous';
@@ -47,6 +50,8 @@ video.setAttribute('playsinline','');
 video.setAttribute('webkit-playsinline','');
 video.muted = true;
 video.preload = 'auto';
+video.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
+document.body.appendChild(video);
 window._video = video; window._rig = rig;
 
 const videoScrub = new VideoScrubController(video, (cur, dur)=>{
@@ -110,10 +115,14 @@ video.addEventListener('canplay', ()=>{
   if (loadingMsg.textContent.includes('Chargement')) loadingMsg.textContent = 'Prêt à démarrer';
 });
 video.addEventListener('error', ()=>{
-  loadingMsg.textContent = 'Erreur vidéo : ./video360-djenne.mp4';
+  loadingMsg.textContent = 'Erreur vidéo : ./video360-djenne.mp4 — réessai...';
   loadingMsg.style.color = '#ff6b6b';
   console.error(video.error);
+  // retry après 1.5s (réseau instable)
+  setTimeout(()=>{ video.load(); }, 1500);
 });
+video.addEventListener('stalled', ()=> console.warn('[360] stalled'));
+video.addEventListener('waiting', ()=> console.warn('[360] waiting'));
 video.addEventListener('timeupdate', ()=>{
   videoScrub.syncFromVideo();
 });
@@ -170,16 +179,25 @@ if (needsPermission) {
 }
 
 // --- Resize & Loop (stable) ---
+let resizeTimeout = null;
 addEventListener('resize', ()=>{
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(()=>{
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  }, 150);
+});
+// Pause quand onglet caché (économie batterie + évite contexte perdu)
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden) {
+    console.log('[360] hidden -> pause');
+  }
 });
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(()=>{
   const dt = clock.getDelta();
   rig.update(dt);
-  // VideoTexture se met à jour auto si vidéo joue, mais on force needsUpdate quand scrub en pause
   if (videoTexture && video.readyState >= 2) videoTexture.needsUpdate = true;
   renderer.render(scene, camera);
 });
