@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Visualiseur 360° - Mosquée de Djenné - Navigation Tactile</title>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; touch-action: none; }
+  a-scene { width: 100vw; height: 100vh; }
+
+  /* Overlay START */
+  #overlay-start {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.82); color: #fff; text-align: center; padding: 24px;
+    backdrop-filter: blur(6px);
+  }
+  #overlay-start.hidden { display: none; }
+  #overlay-start h1 { font-size: 1.4rem; margin-bottom: 8px; letter-spacing: 0.5px; }
+  #overlay-start p { opacity: 0.85; font-size: 0.95rem; max-width: 420px; line-height: 1.4; margin-bottom: 18px; }
+  #btn-start {
+    padding: 14px 28px; font-size: 1.05rem; font-weight: 700; border: none; border-radius: 999px;
+    background: #f9d58b; color: #1a1a1a; cursor: pointer; box-shadow: 0 4px 18px rgba(249,213,139,0.4);
+  }
+  #btn-start:active { transform: scale(0.97); }
+  #loading-msg { margin-top: 12px; font-size: 0.85rem; opacity: 0.7; }
+
+  /* Onboarding / tutoriel tactile */
+  #onboarding {
+    position: fixed; inset: 0; z-index: 90;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.58); backdrop-filter: blur(8px);
+    padding: 20px; transition: opacity 0.4s ease, visibility 0.4s;
+  }
+  #onboarding.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .onboarding-card {
+    background: rgba(28,28,30,0.92); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 20px; padding: 22px 18px; max-width: 360px; width: 100%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5); text-align: center; color: #fff;
+  }
+  .onboarding-card h2 { font-size: 1.05rem; margin-bottom: 14px; color: #f9d58b; }
+  .gestures { display: flex; gap: 12px; margin-bottom: 16px; }
+  .gesture {
+    flex: 1; background: rgba(255,255,255,0.07); border-radius: 14px; padding: 12px 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .gesture-icon {
+    width: 56px; height: 56px; margin: 0 auto 8px; position: relative;
+    background: rgba(249,213,139,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; overflow: hidden;
+  }
+  /* animation main horizontale */
+  .hand-h { animation: swipeH 1.6s ease-in-out infinite; }
+  .hand-v { animation: swipeV 1.6s ease-in-out infinite; }
+  @keyframes swipeH {
+    0%, 100% { transform: translateX(-10px); }
+    50% { transform: translateX(10px); }
+  }
+  @keyframes swipeV {
+    0%, 100% { transform: translateY(-8px); }
+    50% { transform: translateY(8px); }
+  }
+  .hand-track {
+    position: absolute; bottom: 10px; left: 50%; width: 28px; height: 2px; background: rgba(249,213,139,0.6); border-radius: 999px; transform: translateX(-50%);
+  }
+  .hand-track.v { width: 2px; height: 28px; left: 50%; bottom: auto; top: 50%; transform: translate(-50%,-50%); }
+  .gesture p { font-size: 0.78rem; line-height: 1.35; opacity: 0.92; }
+  .gesture strong { color: #f9d58b; font-size: 0.80rem; }
+  #btn-understood {
+    width: 100%; padding: 12px; border: none; border-radius: 999px;
+    background: #f9d58b; color: #1a1a1a; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+  }
+  #btn-understood:active { transform: scale(0.98); }
+  .onboarding-hint { margin-top: 10px; font-size: 0.72rem; opacity: 0.55; }
+
+  /* UI basse - seulement compteur, plus de slider */
+  #ui {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 70%, transparent 100%);
+    display: flex; justify-content: center; pointer-events: none;
+  }
+  #time-label {
+    display: flex; gap: 8px; align-items: center;
+    color: #fff; font-size: 0.82rem; font-variant-numeric: tabular-nums;
+    background: rgba(0,0,0,0.55); padding: 6px 12px; border-radius: 999px;
+    backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.12);
+  }
+  #time-current { color: #f9d58b; font-weight: 700; }
+  #time-duration { opacity: 0.9; }
+  #pct { background: rgba(249,213,139,0.18); color: #f9d58b; padding: 2px 7px; border-radius: 999px; font-weight: 700; }
+
+  #badge-360 {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 10; background: rgba(0,0,0,0.55); color: #fff;
+    padding: 6px 14px; border-radius: 999px; font-size: 0.8rem;
+    backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.15);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="badge-360">360° • Glisse ↔ pour regarder • ↕ ou molette pour le temps</div>
+
+<!-- Overlay START -->
+<div id="overlay-start">
+  <h1>Mosquée de Djenné — Visualiseur 360°</h1>
+  <p>Vidéo 360° <strong>3:30</strong> (2880×1440).<br>Navigation tactile plein écran — pas de barre.</p>
+  <button id="btn-start">▶ Démarrer</button>
+  <div id="loading-msg">Chargement de la vidéo...</div>
+</div>
+
+<!-- Onboarding tutoriel tactile -->
+<div id="onboarding" class="hidden">
+  <div class="onboarding-card">
+    <h2>Comment naviguer ?</h2>
+    <div class="gestures">
+      <div class="gesture">
+        <div class="gesture-icon">
+          <span class="hand-h">👋</span>
+          <div class="hand-track"></div>
+        </div>
+        <p><strong>Gauche / Droite</strong><br>regarder autour<br>(360°)</p>
+      </div>
+      <div class="gesture">
+        <div class="gesture-icon">
+          <span class="hand-v">☝️</span>
+          <div class="hand-track v"></div>
+        </div>
+        <p><strong>Haut / Bas</strong> ou <strong>molette</strong><br>avancer / reculer<br>dans le temps</p>
+      </div>
+    </div>
+    <button id="btn-understood">J'ai compris</button>
+    <div class="onboarding-hint">Disparaît automatiquement après 4s ou au premier geste</div>
+  </div>
+</div>
+
+<!-- Scène A-Frame -->
+<a-scene
+  embedded
+  loading-screen="enabled: false"
+  vr-mode-ui="enabled: true"
+  device-orientation-permission-ui="enabled: true">
+
+  <a-assets>
+    <!-- Chemin vidéo impératif : ./video360-djenne.mp4 (H.264 3:30, équirectangulaire) -->
+    <video id="video360"
+           src="./video360-djenne.mp4"
+           preload="auto"
+           loop="false"
+           crossorigin="anonymous"
+           playsinline
+           webkit-playsinline
+           muted></video>
+  </a-assets>
+
+  <a-videosphere
+    id="sphere360"
+    src="#video360"
+    rotation="0 -90 0"
+    material="shader: flat; side: double">
+  </a-videosphere>
+
+  <a-entity id="rig">
+    <a-entity id="cam"
+              camera="fov: 80"
+              position="0 1.6 0"
+              look-controls="enabled: true; magicWindowTrackingEnabled: true; touchEnabled: true; mouseEnabled: true"
+              wasd-controls="enabled: false">
+    </a-entity>
+  </a-entity>
+</a-scene>
+
+<!-- UI temps sans slider -->
+<div id="ui">
+  <div id="time-label">
+    <span>Étape / Temps : <b id="time-current">00:01</b> / <b id="time-duration">03:30</b></span>
+    <span id="pct">0%</span>
+  </div>
+</div>
+
+<script>
+/**
+ * Visualiseur 360° - Navigation tactile intégrale
+ * - Horizontal (←→) : rotation caméra 360° (look-controls natif A-Frame)
+ * - Vertical (↑↓) / molette : scrub temporel vidéo via requestAnimationFrame (ultra-fluide)
+ * - Onboarding animé disparaît sur "J'ai compris" ou premier geste ou après 4s
+ */
+
+const video = document.getElementById('video360');
+const timeCurrentEl = document.getElementById('time-current');
+const timeDurationEl = document.getElementById('time-duration');
+const pctEl = document.getElementById('pct');
+const overlay = document.getElementById('overlay-start');
+const btnStart = document.getElementById('btn-start');
+const loadingMsg = document.getElementById('loading-msg');
+const onboarding = document.getElementById('onboarding');
+const btnUnderstood = document.getElementById('btn-understood');
+
+function fmt(t){
+  if (isNaN(t) || !isFinite(t)) return '--:--';
+  t = Math.max(0, Math.floor(t));
+  const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = t%60;
+  if (h>0) return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function updateTimeUI(current, duration){
+  timeCurrentEl.textContent = fmt(current);
+  timeDurationEl.textContent = fmt(duration);
+  const p = duration>0 ? Math.round((current/duration)*100) : 0;
+  pctEl.textContent = p + '%';
+}
+
+// --- Préparation vidéo ---
+const START_TIME = 1.0; // évite frame noire à t=0
+video.muted = true;
+video.setAttribute('muted','');
+video.setAttribute('playsinline','');
+video.pause();
+try { video.currentTime = START_TIME; } catch(e){}
+
+video.addEventListener('loadedmetadata', () => {
+  const dur = video.duration;
+  console.log('[360] duration:', dur);
+  updateTimeUI(video.currentTime, dur);
+  loadingMsg.textContent = 'Prêt • ' + fmt(dur) + ' • Cliquez sur Démarrer';
+  loadingMsg.style.color = '#4ade80';
+  try { if (video.currentTime < 0.9) video.currentTime = START_TIME; } catch(e){}
+});
+video.addEventListener('loadeddata', () => {
+  console.log('[360] loadeddata');
+  loadingMsg.textContent = 'Première image prête • ' + fmt(video.duration);
+  try { if (video.currentTime < 0.9) video.currentTime = START_TIME; } catch(e){}
+});
+if (video.readyState >= 1) updateTimeUI(video.currentTime, video.duration || 210.77);
+
+video.addEventListener('error', ()=>{
+  loadingMsg.textContent = 'Erreur vidéo : ./video360-djenne.mp4';
+  loadingMsg.style.color = '#ff6b6b';
+});
+video.addEventListener('canplay', ()=>{
+  if (loadingMsg.textContent.includes('Chargement')) loadingMsg.textContent = 'Prêt à démarrer';
+});
+
+// --- Onboarding ---
+let onboardingAutoTimer = null;
+let onboardingHidden = true; // commence caché, sera montré après Démarrer
+function showOnboarding(){
+  onboarding.classList.remove('hidden');
+  onboardingHidden = false;
+  clearTimeout(onboardingAutoTimer);
+  // auto hide après 5s si pas de geste
+  onboardingAutoTimer = setTimeout(hideOnboarding, 5000);
+}
+function hideOnboarding(){
+  if (onboardingHidden) return;
+  onboardingHidden = true;
+  onboarding.classList.add('hidden');
+  clearTimeout(onboardingAutoTimer);
+}
+btnUnderstood.addEventListener('click', hideOnboarding);
+
+// --- Démarrage (débloque autoplay) ---
+async function unlockVideo(){
+  try{
+    loadingMsg.textContent = 'Initialisation...';
+    loadingMsg.style.color = '#fff';
+    const p = video.play();
+    if (p) await p;
+    await new Promise(r => setTimeout(r, 250));
+    video.pause();
+    video.currentTime = START_TIME;
+    updateTimeUI(START_TIME, video.duration);
+    overlay.classList.add('hidden');
+    // affiche tutoriel tactile
+    showOnboarding();
+    console.log('[360] débloqué à t='+START_TIME);
+  } catch(e){
+    console.warn(e);
+    loadingMsg.textContent = 'Erreur: ' + e.message;
+    loadingMsg.style.color = '#ff6b6b';
+    setTimeout(()=> overlay.classList.add('hidden'), 800);
+    showOnboarding();
+  }
+}
+btnStart.addEventListener('click', unlockVideo);
+overlay.addEventListener('click', (e)=>{ if(e.target===overlay) unlockVideo(); });
+
+// --- Scrub temporel ultra-fluide via rAF ---
+let rafPending = false;
+let targetTime = START_TIME;
+function scrubTo(t){
+  const dur = video.duration || 210.768;
+  targetTime = Math.max(0, Math.min(dur, t));
+  updateTimeUI(targetTime, dur);
+  if (!rafPending){
+    rafPending = true;
+    requestAnimationFrame(()=>{
+      try{
+        if ('fastSeek' in video) video.fastSeek(targetTime);
+        else video.currentTime = targetTime;
+      } catch(err){ video.currentTime = targetTime; }
+      rafPending = false;
+    });
+  }
+}
+// synchro si vidéo joue (ex: VR)
+video.addEventListener('timeupdate', ()=>{
+  if (!rafPending) {
+    targetTime = video.currentTime;
+    updateTimeUI(video.currentTime, video.duration);
+  }
+});
+
+// --- GESTES TACTILES PLEIN ÉCRAN ---
+// Horizontal -> laisse A-Frame look-controls tourner
+// Vertical -> scrub temps, bloque la rotation verticale
+let startX = 0, startY = 0, startTimeAtGesture = 0;
+let gestureType = null; // 'h' | 'v' | null
+let isTouchActive = false;
+const VERTICAL_FACTOR = 0.14; // secondes par pixel vertical (200px ~ 28s)
+const WHEEL_FACTOR = 0.025; // secondes par delta wheel
+
+function isOnboardingVisible(){ return !onboarding.classList.contains('hidden'); }
+
+window.addEventListener('touchstart', (e)=>{
+  if (overlay.classList.contains('hidden') === false) return; // overlay start bloque tout
+  if (e.touches.length !== 1) return;
+  isTouchActive = true;
+  gestureType = null;
+  startX = e.touches[0].clientX;
+  startY = e.touches[0].clientY;
+  startTimeAtGesture = video.currentTime || targetTime;
+}, {passive: false});
+
+window.addEventListener('touchmove', (e)=>{
+  if (!isTouchActive) return;
+  if (e.touches.length !== 1) return;
+  const curX = e.touches[0].clientX;
+  const curY = e.touches[0].clientY;
+  const dx = curX - startX;
+  const dy = startY - curY; // positif quand on glisse vers le haut (avance)
+
+  if (gestureType === null){
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    gestureType = Math.abs(dy) > Math.abs(dx) ? 'v' : 'h';
+    // premier geste -> cache onboarding
+    if (!onboardingHidden) hideOnboarding();
+  }
+
+  if (gestureType === 'v'){
+    // vertical = temps, on bloque la caméra
+    e.preventDefault();
+    e.stopPropagation();
+    const newT = startTimeAtGesture + dy * VERTICAL_FACTOR;
+    scrubTo(newT);
+  } else {
+    // horizontal = laisse passer vers look-controls, mais on a déjà caché l'onboarding
+  }
+}, {passive: false});
+
+window.addEventListener('touchend', ()=>{
+  isTouchActive = false;
+  gestureType = null;
+}, {passive: false});
+window.addEventListener('touchcancel', ()=>{
+  isTouchActive = false;
+  gestureType = null;
+}, {passive: false});
+
+// Souris : drag vertical ou molette
+let mouseDown = false, mouseStartY = 0, mouseStartTime = 0, mouseGesture = null;
+window.addEventListener('mousedown', (e)=>{
+  if (overlay.classList.contains('hidden') === false) return;
+  if (e.button !== 0) return;
+  mouseDown = true;
+  mouseStartY = e.clientY;
+  mouseStartTime = video.currentTime || targetTime;
+  mouseGesture = null;
+});
+window.addEventListener('mousemove', (e)=>{
+  if (!mouseDown) return;
+  const dy = mouseStartY - e.clientY;
+  const dx = e.clientX - (mouseStartY ? mouseStartY : e.clientX); // approx
+  // on détecte vertical si déplacement Y dominant
+  if (mouseGesture === null){
+    if (Math.abs(dy) < 8) return;
+    // si on bouge verticalement beaucoup, on considère scrub
+    mouseGesture = 'v';
+    if (!onboardingHidden) hideOnboarding();
+  }
+  if (mouseGesture === 'v'){
+    e.preventDefault();
+    const newT = mouseStartTime + dy * 0.10; // un peu moins sensible à la souris
+    scrubTo(newT);
+  }
+}, {passive: false});
+window.addEventListener('mouseup', ()=>{
+  mouseDown = false;
+  mouseGesture = null;
+});
+
+// Molette : toujours scrub (ultra fluide)
+window.addEventListener('wheel', (e)=>{
+  if (overlay.classList.contains('hidden') === false) return;
+  // si onboarding visible, premier wheel le cache et scrub quand même
+  if (!onboardingHidden) hideOnboarding();
+  // évite le scroll page
+  e.preventDefault();
+  const delta = e.deltaY;
+  // deltaY positif = molette vers bas ; on avance dans le temps quand on va vers le bas (intuitif)
+  // inverse si tu préfères : utiliser -delta
+  const newT = (video.currentTime || targetTime) + delta * WHEEL_FACTOR;
+  scrubTo(newT);
+}, {passive: false});
+
+</script>
+</body>
+</html>
